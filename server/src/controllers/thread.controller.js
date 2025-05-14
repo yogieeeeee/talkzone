@@ -12,18 +12,19 @@ export const createThread = async (req, res) => {
     const image = req.files?.image
     let imagePath = null
 
+    // Validate required content field
     if (!content) {
       return res
         .status(400)
         .json({success: false, message: "Content is required"})
     }
 
-    // If there is an image file in the request
+    // Handle image upload processing
     if (image) {
       const imageFile = req.files.image
       const buffer = imageFile.data
 
-      // File type detection based on magic number
+      // Magic number validation for image integrity
       const type = await fileTypeFromBuffer(buffer)
       if (!type || !allowed_mimetype.includes(type.mime)) {
         return res
@@ -31,11 +32,11 @@ export const createThread = async (req, res) => {
           .json({success: false, message: "Unsupported file type"})
       }
 
-      // Generate unique file names
+      // Generate unique filename with timestamp
       const fileName = `thread-${Date.now()}.${type.ext}`
       const uploadDir = path.resolve("public", "uploads")
 
-      // Make sure the directory exists
+      // Ensure upload directory exists
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, {recursive: true})
       }
@@ -43,11 +44,11 @@ export const createThread = async (req, res) => {
       imagePath = `/uploads/${fileName}`
       const fullPath = path.join(uploadDir, fileName)
 
-      // Save file to disk
+      // Persist image to storage
       fs.writeFileSync(fullPath, buffer)
     }
 
-    // Create a new document
+    // Create database document
     const newThread = await Thread.create({
       content,
       image: imagePath,
@@ -57,10 +58,11 @@ export const createThread = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Thread created successfully",
-      thread: newThread
+      thread: newThread // Return created thread document
     })
   } catch (error) {
     console.error(error)
+    // Generic server error response
     return res.status(500).json({success: false, message: "Server error"})
   }
 }
@@ -68,43 +70,44 @@ export const createThread = async (req, res) => {
 /////////////// GET MY CREATED THREADS ////////////////
 export const getMyThreads = async (req, res) => {
   try {
-    const authorId = req.user.id
+    const authorId = req.user.id // Authenticated user ID from middleware
 
-    // Get query params for pagination and filter
+    // Parse and validate pagination parameters
     let {page = 1, limit = 10, hasImage} = req.query
     let pageNum = parseInt(page, 10)
     let limitNum = parseInt(limit, 10)
 
+    // Ensure valid numeric values for pagination
     if (Number.isNaN(pageNum) || pageNum < 1) pageNum = 1
     if (Number.isNaN(limitNum) || limitNum < 1) limitNum = 10
 
-    // Build a basic filter
+    // Base filter - always filter by authorized user
     const filter = {author: authorId}
 
-    // Filter based on image presence if param is given
+    // Optional image presence filter
     if (hasImage === "true") {
-      filter.image = {$ne: null}
+      filter.image = {$ne: null} // Has non-null image
     } else if (hasImage === "false") {
-      filter.image = null
+      filter.image = null // Explicitly no image
     }
 
-    // Count total documents according to filters
+    // Get total count for pagination metadata
     const total = await Thread.countDocuments(filter)
 
-    // Query with pagination
+    // Database query with sorting and pagination
     const threads = await Thread.find(filter)
-      .sort({createdAt: -1})
-      .skip((pageNum - 1) * limitNum)
-      .limit(limit)
+      .sort({createdAt: -1}) // Newest first
+      .skip((pageNum - 1) * limitNum) // Pagination offset
+      .limit(limit) // Results per page
 
     return res.status(200).json({
       success: true,
       threads,
       pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limit)
+        total, // Total matching documents
+        page: pageNum, // Current page
+        limit: limitNum, // Items per page
+        totalPages: Math.ceil(total / limit) // Calculate total pages
       }
     })
   } catch (error) {
@@ -116,30 +119,32 @@ export const getMyThreads = async (req, res) => {
 /////////////// GET ALL THREADS ////////////////
 export const getAllThreads = async (req, res) => {
   try {
-    // Ambil query params untuk pagination
+    // Parse pagination parameters from query string
     let {page = "1", limit = "10"} = req.query
     let pageNum = parseInt(page, 10)
     let limitNum = parseInt(limit, 10)
 
-    // Validasi page dan limit
+    // Validate and sanitize pagination inputs
     if (Number.isNaN(pageNum) || pageNum < 1) pageNum = 1
     if (Number.isNaN(limitNum) || limitNum < 1) limitNum = 10
 
-    // Tanpa filter khusus, ambil semua threads
-    const total = await Thread.countDocuments()
+    // Get total thread count for pagination
+    const total = await Thread.countDocuments() // No filter = count all documents
+
+    // Retrieve paginated results with descending chronological order
     const threads = await Thread.find()
-      .sort({createdAt: -1})
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
+      .sort({createdAt: -1}) // Latest first
+      .skip((pageNum - 1) * limitNum) // Calculate offset
+      .limit(limitNum) // Apply page size
 
     return res.status(200).json({
       success: true,
       threads,
       pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum)
+        total, // Total available items
+        page: pageNum, // Current page number
+        limit: limitNum, // Items per page
+        totalPages: Math.ceil(total / limitNum) // Calculate total pages
       }
     })
   } catch (error) {
@@ -151,17 +156,37 @@ export const getAllThreads = async (req, res) => {
 /////////////// GET THREAD BY ID ////////////////
 export const getThreadById = async (req, res) => {
   try {
-    const {id} = req.params
-    const thread = await Thread.findById(id)
+    // Extract thread ID from URL parameters
+    const { id } = req.params;
+    
+    // Fetch thread with Mongoose ID lookup
+    const thread = await Thread.findById(id);
+
+    // Handle thread not found case
     if (!thread) {
-      return res.status(404).json({success: false, message: "Thread not found"})
+      return res.status(404).json({
+        success: false,
+        message: "Thread not found"
+      });
     }
-    return res.status(200).json({success: true, thread})
+
+    // Return complete thread data
+    return res.status(200).json({
+      success: true,
+      thread // Return full thread document
+    });
+
   } catch (error) {
-    console.error(error)
-    return res.status(500).json({success: false, message: "Server error"})
+    // Log error details for debugging
+    console.error("[Thread Fetch Error]", error);
+    
+    // Generic error response
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
-}
+};
 
 /////////////// UPDATE THREAD ////////////////
 export const updateThread = async (req, res) => {
@@ -170,90 +195,138 @@ export const updateThread = async (req, res) => {
     const {content} = req.body
     const image = req.files?.image
 
+    // Verify thread existence and ownership
     const thread = await Thread.findById(id)
     if (!thread) {
       return res.status(404).json({
         success: false,
-        message: "thread not found"
+        message: "Thread not found"
       })
     }
+
+    // Authorization check
     if (thread.author.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({success: false, message: "Forbidden: not the author"})
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: not the author"
+      })
     }
 
     let imagePath = thread.image
-    const imageFile = req.files.image
-    const buffer = imageFile.data
+
+    // Handle image update if new image provided
     if (image) {
-      // Hapus gambar lama
-      const oldImagePath = path.join(process.cwd(), "public", thread.image)
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath)
+      const imageFile = req.files.image
+      const buffer = imageFile.data
+
+      // Clean up existing image file
+      if (thread.image) {
+        const oldImagePath = path.join(process.cwd(), "public", thread.image)
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath) // Delete old file
+        }
       }
 
-      // Upload gambar baru
+      // Validate new image file type
       const type = await fileTypeFromBuffer(buffer)
       if (!type || !allowed_mimetype.includes(type.mime)) {
-        return res
-          .status(400)
-          .json({success: false, message: "Unsupported file type"})
+        return res.status(400).json({
+          success: false,
+          message: "Unsupported file type"
+        })
       }
-      const uploadDir = path.join(process.cwd(), "public", "uploads")
-      const fileName = `${Date.now()}_${image.name.replace(/\s/g, "_")}`
-      const filePath = path.join(uploadDir, fileName)
 
+      // Generate unique filename
+      const fileName = `${Date.now()}_${image.name.replace(/\s/g, "_")}`
+      const uploadDir = path.join(process.cwd(), "public", "uploads")
+
+      // Ensure upload directory exists
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, {recursive: true})
+      }
+
+      // Save new image
+      const filePath = path.join(uploadDir, fileName)
       await image.mv(filePath)
       imagePath = `/uploads/${fileName}`
     }
 
+    // Prepare update payload
     const updatedContent = {
-      content: content || thread.content,
+      content: content || thread.content, // Preserve existing content if not provided
       image: imagePath
     }
+
+    // Perform atomic update with validation
     const updatedThread = await Thread.findByIdAndUpdate(id, updatedContent, {
-      new: true,
-      runValidators: true
+      new: true, // Return updated document
+      runValidators: true // Ensure schema validation
     })
 
-    await thread.save()
-    return res
-      .status(200)
-      .json({success: true, message: "Thread updated", thread})
+    return res.status(200).json({
+      success: true,
+      message: "Thread updated",
+      thread: updatedThread // Return updated document
+    })
   } catch (error) {
-    console.error(error)
-    return res.status(500).json({success: false, message: "Server error"})
+    console.error("[Update Error]", error)
+    return res.status(500).json({
+      success: false,
+      message:
+        process.env.NODE_ENV === "production" ? "Server error" : error.message
+    })
   }
 }
 
 /////////////// DELETE THREAD ////////////////
 export const deleteThread = async (req, res) => {
   try {
-    const {id} = req.params
-    const thread = await Thread.findById(id)
+    // Extract thread ID from URL parameters
+    const { id } = req.params;
+    
+    // Find thread document
+    const thread = await Thread.findById(id);
     if (!thread) {
-      return res.status(404).json({success: false, message: "Thread not found"})
+      return res.status(404).json({
+        success: false,
+        message: "Thread not found"
+      });
     }
-    // check the author
+
+    // Authorization check - must be original author
     if (thread.author.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({success: false, message: "Forbidden: not the author"})
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: not the author"
+      });
     }
 
-    // Delete image files
-    const imagePath = path.join(process.cwd(), "public", thread.image)
-    if (fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath)
+    // Clean up associated image file
+    if (thread.image) {
+      const imagePath = path.join(process.cwd(), "public", thread.image);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath); // Permanently delete file
+      }
     }
 
-    // Delete thread document
-    await thread.deleteOne()
+    // Remove document from database
+    await thread.deleteOne(); // Prefer deleteOne() over remove() for better type checking
 
-    return res.status(200).json({success: true, message: "Thread deleted"})
+    return res.status(200).json({
+      success: true,
+      message: "Thread deleted"
+    });
+
   } catch (error) {
-    console.error(error)
-    return res.status(500).json({success: false, message: "Server error"})
+    // Log detailed error for debugging
+    console.error("[Delete Error]", error);
+    
+    // Secure error response
+    return res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' 
+        ? "Server error" 
+        : error.message
+    });
   }
-}
+};
