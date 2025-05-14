@@ -8,7 +8,7 @@ import createAdmin from "./setup/createAdmin.js"
 // Routes
 import authRoute from "./routers/auth.route.js"
 import adminRoute from "./routers/admin.route.js"
-import userRoute from "./routers/user.route.js"
+import threadRoute from "./routers/thread.route.js"
 const app = express()
 
 connectDB()
@@ -24,7 +24,7 @@ app.use(
 
 app.use("/api/auth", authRoute)
 app.use("/api/admin", adminRoute)
-app.use("/api/user", userRoute)
+app.use("/api", threadRoute)
 
 app.listen(5000, () => {
   console.log("server is running on port 5000")

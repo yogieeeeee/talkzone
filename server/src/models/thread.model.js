@@ -16,14 +16,11 @@ const threadSchema = new Schema(
       ref: "User",
       required: true
     },
-    likes: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-        select: false
-      }
-    ],
-    views: {
+    likeCount: {
+      type: Number,
+      default: 0
+    },
+    commentCount: {
       type: Number,
       default: 0
     }
@@ -31,4 +28,4 @@ const threadSchema = new Schema(
   {timestamps: true}
 )
 
-export default mongoose.model("blog", threadSchema)
+export default mongoose.model("thread", threadSchema)

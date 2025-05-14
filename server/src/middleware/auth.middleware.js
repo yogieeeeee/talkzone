@@ -35,7 +35,6 @@ const authMiddleware = async (req, res, next) => {
     }
     next()
   } catch (error) {
-    console.error("Error otorisasi:", error)
     res.status(401).json({
       success: false,
       message: "Session has expired or token is invalid"

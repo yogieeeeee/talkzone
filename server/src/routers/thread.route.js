@@ -1,5 +1,12 @@
 import express from "express"
-import {createThread, getMyThreads} from "../controllers/thread.controller.js"
+import {
+  createThread,
+  getMyThreads,
+  getAllThreads,
+  getThreadById,
+  updateThread,
+  deleteThread
+} from "../controllers/thread.controller.js"
 
 // Middleware
 import authMiddleware from "../middleware/auth.middleware.js"
@@ -16,7 +23,6 @@ router.post(
   attachID("author"),
   createThread
 )
-
 router.get(
   "/thread/mine",
   authMiddleware,
@@ -24,5 +30,21 @@ router.get(
   checkStatus,
   getMyThreads
 )
+router.put(
+  "/thread/:id/update",
+  authMiddleware,
+  checkRole(["user"]),
+  checkStatus,
+  updateThread
+)
+router.delete(
+  "/thread/:id/delete",
+  authMiddleware,
+  checkRole(["user"]),
+  checkStatus,
+  deleteThread
+)
+router.get("/threads", getAllThreads)
+router.get("/thread/:id", getThreadById)
 
 export default router
